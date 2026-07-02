@@ -306,7 +306,7 @@
   <header>
     <div class="eyebrow">TaigaTCG · Fee Recovery Tool</div>
     <h1>Listing Price Calculator</h1>
-    <p>eBay takes 12% off the top of your listed price — not your card cost. Divide by 0.88 to fully recover the card's value, your shipping cost, and the fee itself.</p>
+    <p>eBay takes 12% off the top of your listed price plus a flat per-order fee — $0.30 if the price lands at $10 or under, $0.40 if it's over. This adds your card value, shipping, and both fees, then divides by 0.88 so you recover all of it.</p>
   </header>
 
   <div class="tabs">
@@ -339,12 +339,13 @@
       <div class="result">
         <div class="result-inner">
           <div class="result-label">Charge the buyer</div>
-          <div class="result-price" id="resultPrice">$18.18</div>
+          <div class="result-price" id="resultPrice">$18.64</div>
           <div class="breakdown-row"><span class="k">Card value</span><span id="bCard">$15.00</span></div>
           <div class="breakdown-row"><span class="k">Shipping recovered</span><span id="bShip">$1.00</span></div>
-          <div class="breakdown-row"><span class="k">eBay fee (12%)</span><span id="bFee">$2.18</span></div>
+          <div class="breakdown-row"><span class="k">eBay fee (12%)</span><span id="bFee">$2.24</span></div>
+          <div class="breakdown-row"><span class="k">eBay flat fee</span><span id="bFlat">$0.40</span></div>
           <div class="breakdown-row"><span class="k">You keep</span><span id="bKeep">$16.00</span></div>
-          <div class="note">List it as $<span id="noteFull">18.18</span> item price with free shipping — or split it however you like across item price + shipping field, as long as the two add up to this total.</div>
+          <div class="note">List it as $<span id="noteFull">18.64</span> item price with free shipping — or split it however you like across item price + shipping field, as long as the two add up to this total.</div>
         </div>
       </div>
     </div>
@@ -382,9 +383,21 @@ function calcCard(price, shipOverride){
     ? shipOverride
     : (tier === 'envelope' ? 1.00 : 6.00);
   const subtotal = price + shipCost;
-  const listingPrice = subtotal / NET_RATE;
-  const fee = listingPrice - subtotal;
-  return {price, tier, shipCost, subtotal, listingPrice, fee};
+
+  // eBay's flat per-order fee depends on the final listing price:
+  // $0.30 if the price lands at $10.00 or under, $0.40 if it's over.
+  // Solve with the $0.30 fee first; if that pushes the price above $10,
+  // redo with $0.40. (Above the threshold the $0.40 result is always
+  // self-consistent, so there's no ambiguous middle case.)
+  let flatFee = 0.30;
+  let listingPrice = (subtotal + flatFee) / NET_RATE;
+  if(listingPrice > 10.00){
+    flatFee = 0.40;
+    listingPrice = (subtotal + flatFee) / NET_RATE;
+  }
+
+  const fee = listingPrice - subtotal - flatFee; // eBay 12% percentage fee
+  return {price, tier, shipCost, subtotal, listingPrice, fee, flatFee};
 }
 
 // ---- Tabs ----
@@ -426,6 +439,7 @@ function renderSingle(){
   document.getElementById('bCard').textContent = fmt(r.price);
   document.getElementById('bShip').textContent = fmt(r.shipCost);
   document.getElementById('bFee').textContent = fmt(r.fee);
+  document.getElementById('bFlat').textContent = fmt(r.flatFee);
   document.getElementById('bKeep').textContent = fmt(r.subtotal);
   document.getElementById('noteFull').textContent = r.listingPrice.toFixed(2);
 }
@@ -483,9 +497,9 @@ function renderBatch(){
 }
 
 function buildCSV(){
-  const header = 'Card Price,Tier,Shipping,eBay Fee,List Price\n';
+  const header = 'Card Price,Tier,Shipping,eBay Fee,eBay Flat Fee,List Price\n';
   const rows = lastBatchResults.map(r=>
-    `${r.price.toFixed(2)},${r.tier},${r.shipCost.toFixed(2)},${r.fee.toFixed(2)},${r.listingPrice.toFixed(2)}`
+    `${r.price.toFixed(2)},${r.tier},${r.shipCost.toFixed(2)},${r.fee.toFixed(2)},${r.flatFee.toFixed(2)},${r.listingPrice.toFixed(2)}`
   ).join('\n');
   return header + rows;
 }
