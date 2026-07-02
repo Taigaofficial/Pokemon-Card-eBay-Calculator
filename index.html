@@ -312,6 +312,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="single">Single Card</button>
     <button class="tab" data-tab="batch">Batch Pricing</button>
+    <button class="tab" data-tab="lot">Lot Pricing</button>
   </div>
 
   <!-- SINGLE CARD -->
@@ -367,6 +368,51 @@
     </div>
   </div>
 
+  <!-- LOT PRICING -->
+  <div class="panel" id="panel-lot">
+    <div class="card">
+      <div class="field">
+        <label for="lotCardPrice">Per-card market value</label>
+        <div class="price-input">
+          <span>$</span>
+          <input type="number" id="lotCardPrice" inputmode="decimal" step="0.01" min="0" placeholder="0.50" value="0.50">
+        </div>
+        <div id="lotTierBadge" class="tier-badge envelope">Envelope tier · +$1.00 shipping</div>
+      </div>
+
+      <div class="field">
+        <label for="lotQty">Quantity in the lot</label>
+        <div class="price-input">
+          <span>×</span>
+          <input type="number" id="lotQty" inputmode="numeric" step="1" min="1" placeholder="4" value="4">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="lotShipOverride">Shipping cost (auto-set, editable)</label>
+        <div class="price-input">
+          <span>$</span>
+          <input type="number" id="lotShipOverride" inputmode="decimal" step="0.01" min="0" value="1.00">
+        </div>
+      </div>
+
+      <button class="run" onclick="renderLot()">Calculate</button>
+
+      <div class="result">
+        <div class="result-inner">
+          <div class="result-label">List the lot at</div>
+          <div class="result-price" id="lotResultPrice">$3.75</div>
+          <div class="breakdown-row"><span class="k">Total card value</span><span id="lotBCard">$2.00</span></div>
+          <div class="breakdown-row"><span class="k">Shipping recovered</span><span id="lotBShip">$1.00</span></div>
+          <div class="breakdown-row"><span class="k">eBay fee (12%)</span><span id="lotBFee">$0.45</span></div>
+          <div class="breakdown-row"><span class="k">eBay flat fee</span><span id="lotBFlat">$0.30</span></div>
+          <div class="breakdown-row"><span class="k">Price per card</span><span id="lotPerCard">$0.94</span></div>
+          <div class="note">List the whole lot at $<span id="lotNoteFull">3.75</span> with free shipping. Price-per-card is for your reference — buyers pay the single lot total.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -398,6 +444,25 @@ function calcCard(price, shipOverride){
 
   const fee = listingPrice - subtotal - flatFee; // eBay 12% percentage fee
   return {price, tier, shipCost, subtotal, listingPrice, fee, flatFee};
+}
+
+// Price a lot of `quantity` identical cards as one listing. The shipping tier
+// keys off the TOTAL lot value (reusing calcCard's <$20 / >=$20 logic), and the
+// same flat-fee resolution applies. pricePerCard is reference-only.
+function calcLot(perCardValue, quantity, shipOverride){
+  const lotValue = perCardValue * quantity;
+  const r = calcCard(lotValue, shipOverride);
+  return {
+    perCardValue, quantity,
+    price: r.price,            // total card value of the lot
+    tier: r.tier,
+    shipCost: r.shipCost,
+    subtotal: r.subtotal,
+    listingPrice: r.listingPrice,
+    fee: r.fee,
+    flatFee: r.flatFee,
+    pricePerCard: r.listingPrice / quantity
+  };
 }
 
 // ---- Tabs ----
@@ -445,16 +510,70 @@ function renderSingle(){
 }
 renderSingle();
 
+// ---- Lot pricing ----
+const lotCardPriceEl = document.getElementById('lotCardPrice');
+const lotQtyEl = document.getElementById('lotQty');
+const lotShipOverrideEl = document.getElementById('lotShipOverride');
+let lotShipManuallyEdited = false;
+
+function lotAutoTier(){
+  const perCard = parseFloat(lotCardPriceEl.value) || 0;
+  const qty = Math.max(1, parseInt(lotQtyEl.value, 10) || 1);
+  const lotValue = perCard * qty;
+  const tier = lotValue < 20 ? 'envelope' : 'ground';
+  const badge = document.getElementById('lotTierBadge');
+  if(!lotShipManuallyEdited){
+    lotShipOverrideEl.value = (tier === 'envelope' ? 1.00 : 6.00).toFixed(2);
+  }
+  badge.className = 'tier-badge ' + tier;
+  badge.textContent = tier === 'envelope'
+    ? 'Envelope tier · +$1.00 shipping'
+    : 'Ground Advantage tier · +$6.00 shipping';
+}
+lotCardPriceEl.addEventListener('input', lotAutoTier);
+lotQtyEl.addEventListener('input', lotAutoTier);
+lotShipOverrideEl.addEventListener('input', ()=>{ lotShipManuallyEdited = true; });
+
+function renderLot(){
+  const perCard = parseFloat(lotCardPriceEl.value) || 0;
+  const qty = Math.max(1, parseInt(lotQtyEl.value, 10) || 1);
+  const shipVal = parseFloat(lotShipOverrideEl.value);
+  const r = calcLot(perCard, qty, isNaN(shipVal) ? null : shipVal);
+
+  document.getElementById('lotResultPrice').textContent = fmt(r.listingPrice);
+  document.getElementById('lotBCard').textContent = fmt(r.price);
+  document.getElementById('lotBShip').textContent = fmt(r.shipCost);
+  document.getElementById('lotBFee').textContent = fmt(r.fee);
+  document.getElementById('lotBFlat').textContent = fmt(r.flatFee);
+  document.getElementById('lotPerCard').textContent = fmt(r.pricePerCard);
+  document.getElementById('lotNoteFull').textContent = r.listingPrice.toFixed(2);
+}
+renderLot();
+
 // ---- Batch ----
 let lastBatchResults = [];
 
 function renderBatch(){
   const raw = document.getElementById('batchInput').value;
   const lines = raw.split(/[\n,]/).map(s=>s.trim()).filter(s=>s.length);
-  const results = lines
-    .map(s=>parseFloat(s))
-    .filter(n=>!isNaN(n) && n >= 0)
-    .map(price=>calcCard(price, null));
+  const results = lines.map(s=>{
+    // "price x quantity" (e.g. "0.50 x 4") → price the line as a lot.
+    const m = s.match(/^([0-9]*\.?[0-9]+)\s*[x×]\s*([0-9]+)$/i);
+    if(m){
+      const perCard = parseFloat(m[1]);
+      const qty = parseInt(m[2], 10);
+      if(isNaN(perCard) || perCard < 0 || isNaN(qty) || qty < 1) return null;
+      return calcLot(perCard, qty, null);
+    }
+    // Otherwise a plain single card — unchanged behavior.
+    const price = parseFloat(s);
+    if(isNaN(price) || price < 0) return null;
+    const r = calcCard(price, null);
+    r.perCardValue = price;   // per-card value == price for a single
+    r.quantity = 1;
+    r.pricePerCard = r.listingPrice;
+    return r;
+  }).filter(Boolean);
 
   lastBatchResults = results;
   const out = document.getElementById('batchOutput');
@@ -464,14 +583,16 @@ function renderBatch(){
     return;
   }
 
-  let totalCard=0, totalShip=0, totalFee=0, totalListing=0;
+  let totalCard=0, totalQty=0, totalShip=0, totalFee=0, totalListing=0;
   let rows = results.map(r=>{
-    totalCard += r.price;
+    totalCard += r.price;          // r.price == total card value of the listing
+    totalQty += r.quantity;
     totalShip += r.shipCost;
     totalFee += r.fee;
     totalListing += r.listingPrice;
     return `<tr>
-      <td>${fmt(r.price)}</td>
+      <td>${fmt(r.perCardValue)}</td>
+      <td>${r.quantity}</td>
       <td><span class="tier-tag ${r.tier}">${r.tier==='envelope'?'Envelope':'Ground'}</span></td>
       <td>${fmt(r.shipCost)}</td>
       <td>${fmt(r.fee)}</td>
@@ -482,11 +603,11 @@ function renderBatch(){
   out.innerHTML = `
     <table>
       <thead>
-        <tr><th>Card</th><th>Tier</th><th>Ship</th><th>Fee</th><th>List at</th></tr>
+        <tr><th>Card</th><th>Qty</th><th>Tier</th><th>Ship</th><th>Fee</th><th>List at</th></tr>
       </thead>
       <tbody>${rows}</tbody>
       <tfoot>
-        <tr><td>${fmt(totalCard)}</td><td></td><td>${fmt(totalShip)}</td><td>${fmt(totalFee)}</td><td>${fmt(totalListing)}</td></tr>
+        <tr><td>${fmt(totalCard)}</td><td>${totalQty}</td><td></td><td>${fmt(totalShip)}</td><td>${fmt(totalFee)}</td><td>${fmt(totalListing)}</td></tr>
       </tfoot>
     </table>
     <div class="actions">
@@ -497,9 +618,9 @@ function renderBatch(){
 }
 
 function buildCSV(){
-  const header = 'Card Price,Tier,Shipping,eBay Fee,eBay Flat Fee,List Price\n';
+  const header = 'Card Price,Quantity,Tier,Shipping,eBay Fee,eBay Flat Fee,List Price\n';
   const rows = lastBatchResults.map(r=>
-    `${r.price.toFixed(2)},${r.tier},${r.shipCost.toFixed(2)},${r.fee.toFixed(2)},${r.flatFee.toFixed(2)},${r.listingPrice.toFixed(2)}`
+    `${r.perCardValue.toFixed(2)},${r.quantity},${r.tier},${r.shipCost.toFixed(2)},${r.fee.toFixed(2)},${r.flatFee.toFixed(2)},${r.listingPrice.toFixed(2)}`
   ).join('\n');
   return header + rows;
 }
