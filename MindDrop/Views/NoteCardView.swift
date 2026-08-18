@@ -32,6 +32,11 @@ struct NoteCardView: View {
                     Text(note.createdAt, format: .dateTime.hour().minute())
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let folder = note.folder {
+                        Label(folder.name, systemImage: "folder")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if note.isProcessing {
                         Label("Needs processing", systemImage: "arrow.trianglehead.clockwise")
                             .font(.caption)
@@ -57,7 +62,7 @@ struct NoteCardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Action Items")
                         .font(.caption.smallCaps().bold())
-                        .foregroundStyle(.mint)
+                        .foregroundStyle(Theme.current.accent)
                     ForEach(note.actionItems, id: \.self) { item in
                         Label(item, systemImage: "circle")
                             .font(.subheadline)
@@ -98,14 +103,7 @@ struct CategoryBadge: View {
     let category: String
 
     private var color: Color {
-        switch category {
-        case "Idea": .yellow
-        case "Task": .mint
-        case "Journal": .purple
-        case "Work": .blue
-        case "Personal": .pink
-        default: .gray
-        }
+        Theme.current.color(forCategory: category)
     }
 
     var body: some View {

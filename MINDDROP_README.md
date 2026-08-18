@@ -21,15 +21,22 @@ with SwiftData.
   note out) or Claude (`claude-opus-5` via the Anthropic Messages API).
 - **Offline-safe** — if the network or API fails, the recording is kept and
   saved as an "Unprocessed thought" you can retry later.
-- **Minimal dark UI** — notes grouped by day, search across title/summary/
-  transcript/category, tap-to-expand cards with action items and raw transcript.
+- **Organized your way** — group notes by day, topic (category), or folder;
+  notes stay time-sorted inside every group. Long-press a card to file it into
+  a folder (or create one on the spot). Search covers title, summary,
+  transcript, category, and folder name.
+- **Minimal dark UI, themeable** — all colors live in `Theme/Theme.swift` as
+  design tokens; swap or edit a palette there and every screen updates.
 
 ## Project layout
 
 ```
 MindDrop/
 ├── App/MindDropApp.swift              # App entry, SwiftData container
-├── Models/Note.swift                  # SwiftData @Model
+├── Models/
+│   ├── Note.swift                     # SwiftData @Model
+│   └── Folder.swift                   # User folders (SwiftData)
+├── Theme/Theme.swift                  # Design tokens (colors, palettes)
 ├── Services/
 │   ├── AudioService.swift             # AVAudioRecorder + AVAudioSession
 │   ├── APIService.swift               # Gemini transcription + Gemini/Claude extraction

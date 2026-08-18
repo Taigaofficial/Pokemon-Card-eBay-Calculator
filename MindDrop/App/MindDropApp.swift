@@ -8,7 +8,7 @@ struct MindDropApp: App {
 
     init() {
         do {
-            modelContainer = try ModelContainer(for: Note.self)
+            modelContainer = try ModelContainer(for: Note.self, Folder.self)
         } catch {
             fatalError("Failed to create SwiftData container: \(error)")
         }

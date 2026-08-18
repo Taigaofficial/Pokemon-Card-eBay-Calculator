@@ -1,18 +1,51 @@
 import SwiftUI
 import SwiftData
 
-/// Main screen: past notes grouped by date, a search bar, and the record button.
+/// How the note list is organized. Notes inside every group stay sorted
+/// by time (newest first).
+enum GroupingMode: String, CaseIterable, Identifiable {
+    case day
+    case topic
+    case folder
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .day: "Day"
+        case .topic: "Topic"
+        case .folder: "Folder"
+        }
+    }
+    var icon: String {
+        switch self {
+        case .day: "calendar"
+        case .topic: "tag"
+        case .folder: "folder"
+        }
+    }
+}
+
+/// Main screen: past notes grouped by day/topic/folder, search, record button.
 struct NotesListView: View {
     @Query(sort: \Note.createdAt, order: .reverse) private var notes: [Note]
+    @Query(sort: \Folder.name) private var folders: [Folder]
     @Environment(\.modelContext) private var modelContext
 
+    @AppStorage("grouping_mode") private var groupingModeRaw = GroupingMode.day.rawValue
     @State private var searchText = ""
     @State private var expandedNoteID: UUID?
     @State private var showingSettings = false
     @State private var captureError: String?
+    @State private var newFolderName = ""
+    @State private var noteAwaitingNewFolder: Note?
 
     private var audioService = AudioService.shared
     private var coordinator = CaptureCoordinator.shared
+    private let theme = Theme.current
+
+    private var groupingMode: GroupingMode {
+        GroupingMode(rawValue: groupingModeRaw) ?? .day
+    }
 
     private var filteredNotes: [Note] {
         guard !searchText.isEmpty else { return notes }
@@ -21,22 +54,47 @@ struct NotesListView: View {
                 || $0.summary.localizedCaseInsensitiveContains(searchText)
                 || $0.transcript.localizedCaseInsensitiveContains(searchText)
                 || $0.category.localizedCaseInsensitiveContains(searchText)
+                || ($0.folder?.name.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
 
-    /// Notes bucketed by calendar day, newest day first.
-    private var groupedNotes: [(day: Date, notes: [Note])] {
-        Dictionary(grouping: filteredNotes) {
-            Calendar.current.startOfDay(for: $0.createdAt)
+    /// Notes bucketed according to the selected grouping mode.
+    private var groupedNotes: [(id: String, title: String, notes: [Note])] {
+        switch groupingMode {
+        case .day:
+            return Dictionary(grouping: filteredNotes) {
+                Calendar.current.startOfDay(for: $0.createdAt)
+            }
+            .sorted { $0.key > $1.key }
+            .map { day, notes in
+                (
+                    id: day.timeIntervalSince1970.description,
+                    title: day.formatted(.dateTime.weekday(.wide).month().day()),
+                    notes: notes
+                )
+            }
+        case .topic:
+            return Dictionary(grouping: filteredNotes, by: \.category)
+                .sorted { $0.key < $1.key }
+                .map { (id: "topic-\($0.key)", title: $0.key, notes: $0.value) }
+        case .folder:
+            let groups = Dictionary(grouping: filteredNotes) { $0.folder?.name ?? "" }
+            let named = groups
+                .filter { !$0.key.isEmpty }
+                .sorted { $0.key < $1.key }
+                .map { (id: "folder-\($0.key)", title: $0.key, notes: $0.value) }
+            // Unfiled notes go last so real folders stay prominent.
+            if let unfiled = groups[""] {
+                return named + [(id: "folder-unfiled", title: "Unfiled", notes: unfiled)]
+            }
+            return named
         }
-        .sorted { $0.key > $1.key }
-        .map { (day: $0.key, notes: $0.value) }
     }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                Color.black.ignoresSafeArea()
+                theme.background.ignoresSafeArea()
 
                 if notes.isEmpty {
                     emptyState
@@ -49,6 +107,9 @@ struct NotesListView: View {
             }
             .navigationTitle("MindDrop")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    groupingMenu
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         showingSettings = true
@@ -73,15 +134,38 @@ struct NotesListView: View {
             } message: {
                 Text(captureError ?? "")
             }
+            .alert(
+                "New Folder",
+                isPresented: .init(
+                    get: { noteAwaitingNewFolder != nil },
+                    set: { if !$0 { noteAwaitingNewFolder = nil } }
+                )
+            ) {
+                TextField("Folder name", text: $newFolderName)
+                Button("Create") { createFolderForPendingNote() }
+                Button("Cancel", role: .cancel) { newFolderName = "" }
+            }
         }
-        .tint(.mint)
+        .tint(theme.accent)
     }
 
     // MARK: - Subviews
 
+    private var groupingMenu: some View {
+        Menu {
+            Picker("Group by", selection: $groupingModeRaw) {
+                ForEach(GroupingMode.allCases) { mode in
+                    Label(mode.label, systemImage: mode.icon).tag(mode.rawValue)
+                }
+            }
+        } label: {
+            Label("Group by", systemImage: groupingMode.icon)
+        }
+    }
+
     private var notesList: some View {
         List {
-            ForEach(groupedNotes, id: \.day) { group in
+            ForEach(groupedNotes, id: \.id) { group in
                 Section {
                     ForEach(group.notes) { note in
                         NoteCardView(
@@ -92,14 +176,15 @@ struct NotesListView: View {
                                 expandedNoteID = expandedNoteID == note.id ? nil : note.id
                             }
                         }
-                        .listRowBackground(Color(.secondarySystemGroupedBackground).opacity(0.35))
+                        .listRowBackground(theme.cardFill)
                         .listRowSeparator(.hidden)
+                        .contextMenu { contextMenu(for: note) }
                     }
                     .onDelete { offsets in
                         delete(offsets, in: group.notes)
                     }
                 } header: {
-                    Text(group.day, format: .dateTime.weekday(.wide).month().day())
+                    Text(group.title)
                         .font(.caption.smallCaps())
                         .foregroundStyle(.secondary)
                 }
@@ -112,6 +197,41 @@ struct NotesListView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private func contextMenu(for note: Note) -> some View {
+        Menu {
+            ForEach(folders) { folder in
+                Button {
+                    note.folder = folder
+                } label: {
+                    if note.folder == folder {
+                        Label(folder.name, systemImage: "checkmark")
+                    } else {
+                        Text(folder.name)
+                    }
+                }
+            }
+            if !folders.isEmpty {
+                Divider()
+            }
+            Button("New Folder…", systemImage: "folder.badge.plus") {
+                noteAwaitingNewFolder = note
+            }
+            if note.folder != nil {
+                Button("Remove from Folder", role: .destructive) {
+                    note.folder = nil
+                }
+            }
+        } label: {
+            Label("Move to Folder", systemImage: "folder")
+        }
+        Button(role: .destructive) {
+            delete(note)
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
     }
 
     private var emptyState: some View {
@@ -134,7 +254,7 @@ struct NotesListView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(audioService.isRecording ? Color.red : Color.mint)
+                    .fill(audioService.isRecording ? theme.recording : theme.accent)
                     .frame(width: 68, height: 68)
                     .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
                     .scaleEffect(
@@ -160,19 +280,39 @@ struct NotesListView: View {
 
     // MARK: - Actions
 
+    private func createFolderForPendingNote() {
+        let name = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+        defer {
+            newFolderName = ""
+            noteAwaitingNewFolder = nil
+        }
+        guard !name.isEmpty, let note = noteAwaitingNewFolder else { return }
+
+        if let existing = folders.first(where: { $0.name == name }) {
+            note.folder = existing
+        } else {
+            let folder = Folder(name: name)
+            modelContext.insert(folder)
+            note.folder = folder
+        }
+    }
+
     private func delete(_ offsets: IndexSet, in groupNotes: [Note]) {
         for index in offsets {
-            let note = groupNotes[index]
-            if let url = note.audioFileURL {
-                try? FileManager.default.removeItem(at: url)
-            }
-            modelContext.delete(note)
+            delete(groupNotes[index])
         }
+    }
+
+    private func delete(_ note: Note) {
+        if let url = note.audioFileURL {
+            try? FileManager.default.removeItem(at: url)
+        }
+        modelContext.delete(note)
     }
 }
 
 #Preview {
     NotesListView()
-        .modelContainer(for: Note.self, inMemory: true)
+        .modelContainer(for: [Note.self, Folder.self], inMemory: true)
         .preferredColorScheme(.dark)
 }

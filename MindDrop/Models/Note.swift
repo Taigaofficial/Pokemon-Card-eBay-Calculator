@@ -18,6 +18,8 @@ final class Note {
     /// True while the note is still waiting on transcription/extraction
     /// (e.g. captured offline or a network failure occurred).
     var isProcessing: Bool
+    /// Optional user-assigned folder (inverse lives on `Folder.notes`).
+    var folder: Folder?
 
     init(
         id: UUID = UUID(),
