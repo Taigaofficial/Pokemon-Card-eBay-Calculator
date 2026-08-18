@@ -3,8 +3,8 @@ import SwiftUI
 /// Settings: API keys and which model does the structured extraction.
 /// Gemini always handles transcription (it accepts the audio directly).
 struct SettingsView: View {
-    @AppStorage("gemini_api_key") private var geminiKey = ""
-    @AppStorage("anthropic_api_key") private var claudeKey = ""
+    @KeychainStorage("gemini_api_key") private var geminiKey
+    @KeychainStorage("anthropic_api_key") private var claudeKey
     @AppStorage("extraction_provider") private var extractionProvider = ExtractionProvider.gemini.rawValue
     @Environment(\.dismiss) private var dismiss
 

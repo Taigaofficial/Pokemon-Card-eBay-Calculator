@@ -77,7 +77,7 @@ Button don't exist in the simulator).
   the foregrounded app — the most reliable way to record from an intent. The
   `audio` background mode keeps an in-progress recording alive if the user
   switches away mid-thought.
-- API keys are intentionally kept on-device (`@AppStorage`) and the app talks
+- API keys are stored in the iOS Keychain (see `KeychainStore.swift`) and the app talks
   to Google/Anthropic directly; for a production app, proxy these calls through
   your own backend instead of shipping user-provided keys.
 - Gemini handles transcription because it accepts audio directly — no separate

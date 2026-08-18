@@ -76,8 +76,8 @@ final class APIService {
     // MARK: - Configuration
 
     private func storedKey(_ name: String) -> String? {
-        let key = UserDefaults.standard.string(forKey: name) ?? ""
-        return key.isEmpty ? nil : key
+        guard let key = KeychainStore.string(for: name), !key.isEmpty else { return nil }
+        return key
     }
 
     private var geminiKey: String {
