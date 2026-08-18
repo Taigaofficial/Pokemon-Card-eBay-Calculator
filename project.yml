@@ -1,0 +1,32 @@
+name: MindDrop
+options:
+  bundleIdPrefix: com.minddrop
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+
+targets:
+  MindDrop:
+    type: application
+    platform: iOS
+    sources:
+      - MindDrop
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        GENERATE_INFOPLIST_FILE: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0.0
+        PRODUCT_BUNDLE_IDENTIFIER: com.minddrop.app
+    info:
+      path: MindDrop/Info.plist
+      properties:
+        NSMicrophoneUsageDescription: >-
+          MindDrop uses the microphone to record your voice thoughts.
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
