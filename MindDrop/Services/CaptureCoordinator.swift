@@ -32,6 +32,7 @@ final class CaptureCoordinator {
             return false
         } else {
             lastError = nil
+            PlaybackService.shared.stop()
             try await AudioService.shared.startRecording()
             return true
         }

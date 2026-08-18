@@ -1,11 +1,15 @@
 import SwiftUI
 
 /// A collapsible card for one note. Collapsed it shows title, category and
-/// time; expanded it reveals the summary, action items, and raw transcript.
+/// time; expanded it reveals the summary, action items, playback/share
+/// controls, and the raw transcript.
 struct NoteCardView: View {
     let note: Note
     let isExpanded: Bool
     let onTap: () -> Void
+
+    private let theme = Theme.current
+    private var playback = PlaybackService.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -16,7 +20,15 @@ struct NoteCardView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.vertical, 6)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(theme.cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(theme.cardBorder, lineWidth: 1)
+                )
+        )
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
     }
@@ -31,11 +43,11 @@ struct NoteCardView: View {
                     CategoryBadge(category: note.category)
                     Text(note.createdAt, format: .dateTime.hour().minute())
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(theme.metaText)
                     if let folder = note.folder {
                         Label(folder.name, systemImage: "folder")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.metaText)
                     }
                     if note.isProcessing {
                         Label("Needs processing", systemImage: "arrow.trianglehead.clockwise")
@@ -62,13 +74,40 @@ struct NoteCardView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Action Items")
                         .font(.caption.smallCaps().bold())
-                        .foregroundStyle(Theme.current.accent)
+                        .foregroundStyle(theme.actionHeader)
                     ForEach(note.actionItems, id: \.self) { item in
-                        Label(item, systemImage: "circle")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Label {
+                            Text(item)
+                        } icon: {
+                            Image(systemName: "checkmark.circle")
+                                .foregroundStyle(theme.checkmark)
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            HStack(spacing: 10) {
+                if note.audioFileURL != nil {
+                    Button {
+                        playback.toggle(note)
+                    } label: {
+                        Label(
+                            playback.isPlaying(note) ? "Stop" : "Play recording",
+                            systemImage: playback.isPlaying(note) ? "stop.fill" : "play.fill"
+                        )
+                        .font(.caption.bold())
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(theme.accent)
+                }
+                ShareLink(item: note.shareText) {
+                    Label("Share", systemImage: "square.and.arrow.up")
+                        .font(.caption.bold())
+                }
+                .buttonStyle(.bordered)
+                .tint(theme.metaText)
             }
 
             if !note.transcript.isEmpty {
@@ -80,7 +119,7 @@ struct NoteCardView: View {
                 } label: {
                     Text("Raw transcript")
                         .font(.caption.smallCaps())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(theme.metaText.opacity(0.8))
                 }
             }
 

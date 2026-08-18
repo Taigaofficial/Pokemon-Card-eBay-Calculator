@@ -94,7 +94,7 @@ struct NotesListView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                theme.background.ignoresSafeArea()
+                backgroundView
 
                 if notes.isEmpty {
                     emptyState
@@ -151,6 +151,28 @@ struct NotesListView: View {
 
     // MARK: - Subviews
 
+    /// Near-black base with ambient glow washes (violet top-left, amber
+    /// bottom-right). Themes with `.clear` glows render as a flat color.
+    private var backgroundView: some View {
+        ZStack {
+            theme.background.ignoresSafeArea()
+            RadialGradient(
+                colors: [theme.glowPrimary.opacity(0.34), .clear],
+                center: UnitPoint(x: -0.1, y: -0.05),
+                startRadius: 0,
+                endRadius: 440
+            )
+            .ignoresSafeArea()
+            RadialGradient(
+                colors: [theme.glowSecondary.opacity(0.26), .clear],
+                center: UnitPoint(x: 1.08, y: 0.82),
+                startRadius: 0,
+                endRadius: 400
+            )
+            .ignoresSafeArea()
+        }
+    }
+
     private var groupingMenu: some View {
         Menu {
             Picker("Group by", selection: $groupingModeRaw) {
@@ -176,7 +198,8 @@ struct NotesListView: View {
                                 expandedNoteID = expandedNoteID == note.id ? nil : note.id
                             }
                         }
-                        .listRowBackground(theme.cardFill)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowSeparator(.hidden)
                         .contextMenu { contextMenu(for: note) }
                     }
@@ -185,8 +208,9 @@ struct NotesListView: View {
                     }
                 } header: {
                     Text(group.title)
-                        .font(.caption.smallCaps())
-                        .foregroundStyle(.secondary)
+                        .font(.caption.smallCaps().bold())
+                        .foregroundStyle(theme.metaText)
+                        .padding(.leading, 4)
                 }
             }
             // Keep the last card clear of the floating record button.
@@ -195,7 +219,7 @@ struct NotesListView: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
     }
 
@@ -256,7 +280,11 @@ struct NotesListView: View {
                 Circle()
                     .fill(audioService.isRecording ? theme.recording : theme.accent)
                     .frame(width: 68, height: 68)
-                    .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
+                    .shadow(
+                        color: (audioService.isRecording ? theme.recording : theme.accent).opacity(0.45),
+                        radius: 16, y: 2
+                    )
+                    .shadow(color: .black.opacity(0.4), radius: 8, y: 4)
                     .scaleEffect(
                         audioService.isRecording
                             ? 1 + CGFloat(audioService.inputLevel) * 0.25

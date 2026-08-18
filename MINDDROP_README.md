@@ -25,8 +25,13 @@ with SwiftData.
   notes stay time-sorted inside every group. Long-press a card to file it into
   a folder (or create one on the spot). Search covers title, summary,
   transcript, category, and folder name.
-- **Minimal dark UI, themeable** — all colors live in `Theme/Theme.swift` as
-  design tokens; swap or edit a palette there and every screen updates.
+- **Playback & sharing** — replay the original recording from an expanded
+  card, or share a note (title, summary, action items) as text via the
+  system share sheet.
+- **"Aurora" dark UI, themeable** — near-black with violet/amber ambient
+  glows, warm amber record button, teal metadata, glassy separated cards.
+  All colors live in `Theme/Theme.swift` as design tokens; swap or edit a
+  palette there (the original mint `midnight` look is kept as an alternate).
 
 ## Project layout
 
@@ -40,6 +45,7 @@ MindDrop/
 ├── Services/
 │   ├── AudioService.swift             # AVAudioRecorder + AVAudioSession
 │   ├── APIService.swift               # Gemini transcription + Gemini/Claude extraction
+│   ├── PlaybackService.swift          # Replay a note's original audio
 │   └── CaptureCoordinator.swift       # record → transcribe → extract → save
 ├── Intents/CaptureThoughtIntent.swift # AppIntent + AppShortcutsProvider
 └── Views/

@@ -49,4 +49,17 @@ extension Note {
         guard let audioFileName else { return nil }
         return URL.documentsDirectory.appending(path: audioFileName)
     }
+
+    /// Plain-text export used by the share sheet.
+    var shareText: String {
+        var lines = [title, "", summary]
+        if !actionItems.isEmpty {
+            lines.append("")
+            lines.append("Action items:")
+            lines.append(contentsOf: actionItems.map { "• \($0)" })
+        }
+        lines.append("")
+        lines.append("— captured with MindDrop, \(createdAt.formatted(date: .abbreviated, time: .shortened))")
+        return lines.joined(separator: "\n")
+    }
 }
